@@ -16,6 +16,7 @@ import time
 import Colorer
 timestr = time.strftime("%Y%m%d-%H%M%S")
 log_filename="lte_udp_test_log_"+timestr+'.txt'
+log_raw = "lte_udp_received_bytes_"+timestr+'.txt'
 
 from prettytable import PrettyTable
 # UDP addressed from nasmesh
@@ -28,7 +29,7 @@ n_packets = 100
 
 UDP_PORT = 5005
 
-table_header = ['Throughput (Mbps)', 'BER(%)']
+table_header = ['Throughput (Mbps)', 'BER(%)', 'Total Bytes', 'Number of Packets']
 message = [0xAA, 0x55, 0xA5, 0X5A, 0xA1, 0xA4, 0xA9, 0xAF, 0x5A, 0x7A, 0x11]
 fake_data = [0xAD, 0x55, 0xA5, 0X5A, 0xA1, 0xA4, 0xA9, 0xAF, 0x5A, 0x7A, 0x11]
 
@@ -120,6 +121,7 @@ class ThreadedServer(threading.Thread):
 		self.sock.bind((self.host, self.port))
 		self.kill_received = False
 		self.outfile = None
+		self.outfile_raw = None
 		threading.Thread.__init__(self)
 		
 		
@@ -138,6 +140,7 @@ class ThreadedServer(threading.Thread):
 		Tp = 0
 		print("|-----------------------------------|")
 		self.outfile = open(log_filename, 'w+')
+		self.outfile_raw = open(log_raw, 'w+')
 
 		while not self.kill_received:
 			try:
@@ -149,12 +152,13 @@ class ThreadedServer(threading.Thread):
 				T += (te-ts)
 				
 				recv_n_packets += 1
-				string = "|Received {0:5d} bytes from client at {1:5f}s|\n".format(len(data), T)
+				string = "|Received {0:5d} bytes from client at {1:5f}s|\n".format(len(data), T*1e6)
 				print(string)
 				logging.info("Writing to file %s", string)
 				self.outfile.write(string)
 				print("|---------------------------------------------|")
 				#print([hex(x) for x in data])
+				
 				if data:
 					tp += len(data)
 					
@@ -164,14 +168,15 @@ class ThreadedServer(threading.Thread):
 
 					data = [hex(x) for x in data] 
 					#print(data)
-					
+					self.outfile_raw.writelines("%s  " % dt for dt in data)
+					self.outfile_raw.write("\n")
 					if recv_n_packets == n_packets:
 						ber = ber/(len(data)*recv_n_packets*8)
 						Tp = throughput(tp, T)
 						print("\n\n\n")
 						print('Results -----------------')
 						t = PrettyTable(table_header)
-						t.add_row([Tp, ber])
+						t.add_row([Tp, ber, tp, n_packets])
 						print("\n\n\n\n")
 						print(t)
 						logging.info("writing to file ...")
@@ -192,6 +197,7 @@ class ThreadedServer(threading.Thread):
 				self.outfile.close()
 				self.close()
 				self.outfile.close()
+				self.outfile_raw.close()
 
 
 	def close(self):
@@ -296,6 +302,7 @@ def main():
 				for t in threads:
 					t.kill_received = True
 					t.outfile.close()
+					t.outfile_raw.close()
 					logging.info("Closed outfile")
 			
 		#sock.close()
