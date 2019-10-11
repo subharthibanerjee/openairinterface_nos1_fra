@@ -311,7 +311,7 @@ def main():
 	elif server_or_client == 1:
 		
 		print("Client starting..")
-		client_send(sock, UDP_UE_ADDR, UDP_PORT)
+		client_send(sock, UDP_ENB_ADDR, UDP_PORT)
 		
 		
 	else:
