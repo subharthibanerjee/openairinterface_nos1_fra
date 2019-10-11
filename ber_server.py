@@ -1,6 +1,8 @@
 '''# socket design and testing file for bit error rate 
    # with channel emulator
    __AUTHOR__="Subharthi Banerjee"
+   @TODO: throughput calculation
+
 
 '''
 
@@ -20,12 +22,12 @@ log_raw = "lte_udp_received_bytes_"+timestr+'.txt'
 
 from prettytable import PrettyTable
 # UDP addressed from nasmesh
-UDP_ENB_ADDR = "10.0.1.1"
+UDP_ENB_ADDR = 'localhost'#"10.0.1.1"
 UDP_UE_ADDR = "10.0.1.2"
 
 # server if 0
 server_or_client = 0
-n_packets = 100
+n_packets = 10000
 
 UDP_PORT = 5005
 
@@ -43,6 +45,7 @@ lock = threading.Lock()
 def parse_arguments():
 
 	"""
+	@TODO: add n_packets as variable
 	"""
 	
 	global server_or_client
@@ -99,7 +102,7 @@ def throughput(total_bytes, time):
 	"""
 	"""
 
-	return ((total_bytes*8)/time)
+	return ((total_bytes*8)//time)*1e-3
 
 
 def count_ones(byte):
@@ -146,25 +149,31 @@ class ThreadedServer(threading.Thread):
 			try:
 				#logging.info(self.sock)
 				ts = time.time()
-				data, address = self.sock.recvfrom(len(message)+1)
+				data, address = self.sock.recvfrom(len(message)+4)
 				te = time.time()
 
 				T += (te-ts)
 				
 				recv_n_packets += 1
-				string = "|Received {0:5d} bytes from client at {1:5f}s|\n".format(len(data), T*1e6)
+				string = "|Received {0:5d} bytes from client at {1:5f} s|\n".format(len(data), T)
 				print(string)
 				logging.info("Writing to file %s", string)
 				self.outfile.write(string)
+				logging.info("Returned from %s", address)
 				print("|---------------------------------------------|")
 				#print([hex(x) for x in data])
 				
 				if data:
 					tp += len(data)
 					
-					
-					for msg, dat in zip(message,data[1:]):
-						ber += ber_byte(msg, dat)
+					if len(data) == len(message) + 1:
+						for msg, dat in zip(message,data[1:]):
+							ber += ber_byte(msg, dat)
+					elif len(data) == len(message) + 2:
+						for msg, dat in zip(message,data[2:]):
+							ber += ber_byte(msg, dat)
+					else:
+						logging.info("Something went wrong or out of sequence")
 
 					data = [hex(x) for x in data] 
 					#print(data)
@@ -183,13 +192,18 @@ class ThreadedServer(threading.Thread):
 						self.outfile.write(t.get_string())
 						self.outfile.write("\n")
 						ber = 0
+						logging.info("Received %d packets", recv_n_packets)
 						recv_n_packets = 0
+
 						#lock.release()
 						Tp = 0
 						tp = 0
 						T = 0
 						
 
+						print("|---------------------------------------------|")
+						print("|---------------------------------------------|")
+						print("\n\n\n\n\n")
 						print("|---------------------------------------------|")
 			except (KeyboardInterrupt, SystemExit) as e:
 				print("Exiting {0}".format(e))
@@ -265,8 +279,17 @@ def client_send(sock, ip_addr, port):
 		try:
 
 			msg = message.copy()
-			msg.insert(0, i)
+			if i <= 255:
+				msg.insert(0, i)
+			# remove headers for IP and UDP
+			elif i>255 and i<65507: 
+				ilow = i & 0x00FF    # lower byte
+				msg.insert(0, ilow)
+				ihigh=i>>8			 # higher byte
+				msg.insert(0, ihigh)
+				
 			msg = bytearray(x for x in msg)
+			#logging.info("message size is now:  %d", len(msg))
 			sock.sendto(msg, addr)
 		except sock.error as e:
 			print("Error code: ", e)
