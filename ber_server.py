@@ -22,7 +22,7 @@ log_raw = "lte_udp_received_bytes_"+timestr+'.txt'
 
 from prettytable import PrettyTable
 # UDP addressed from nasmesh
-UDP_ENB_ADDR = 'localhost'#"10.0.1.1"
+UDP_ENB_ADDR = "10.0.1.1" 'localhost'#
 UDP_UE_ADDR = "10.0.1.2"
 
 # server if 0
