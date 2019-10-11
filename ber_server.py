@@ -27,7 +27,7 @@ UDP_UE_ADDR = "10.0.1.2"
 
 # server if 0
 server_or_client = 0
-n_packets = 10000
+n_packets = 100
 
 UDP_PORT = 5005
 
