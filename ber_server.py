@@ -288,7 +288,7 @@ def main():
 		threads = []
 		print("Server starting..")
 		#sock = server_start(sock, 'localhost', UDP_PORT)
-		udpserver = ThreadedServer('localhost', UDP_PORT, sock)
+		udpserver = ThreadedServer(UDP_ENB_ADDR, UDP_PORT, sock)
 		signal.signal(signal.SIGINT, partial(terminate_process, sock))
 		print('Receiving from client -- threaded')
 		threads.append(udpserver)
@@ -311,7 +311,7 @@ def main():
 	elif server_or_client == 1:
 		
 		print("Client starting..")
-		client_send(sock, 'localhost', UDP_PORT)
+		client_send(sock, UDP_UE_ADDR, UDP_PORT)
 		
 		
 	else:
