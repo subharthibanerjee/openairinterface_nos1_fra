@@ -179,6 +179,7 @@ class ThreadedServer(threading.Thread):
 					#print(data)
 					self.outfile_raw.writelines("%s  " % dt for dt in data)
 					self.outfile_raw.write("\n")
+					logging.info("Received %d packets", recv_n_packets)
 					if recv_n_packets == n_packets:
 						ber = ber/(len(data)*recv_n_packets*8)
 						Tp = throughput(tp, T)
@@ -192,7 +193,7 @@ class ThreadedServer(threading.Thread):
 						self.outfile.write(t.get_string())
 						self.outfile.write("\n")
 						ber = 0
-						logging.info("Received %d packets", recv_n_packets)
+						
 						recv_n_packets = 0
 
 						#lock.release()
