@@ -1,8 +1,22 @@
 '''# socket design and testing file for bit error rate 
    # with channel emulator
    __AUTHOR__="Subharthi Banerjee"
-   @TODO: throughput calculation
+   @Done: throughput calculation  ()
+	
 
+	@TODO: ctrl+c does not close the thread
+	it waits to recv from socket. Solve this issue
+	to close thread in the Ubuntu
+
+	@TODO: check why a lot of packets not working
+	for UDP. Even in local host.
+
+	*** check if linux then bind to oai0
+	if not do not bind
+
+	*** check non-blocking for thread execution
+
+	** add more data to the message by a multiplier
 
 '''
 
@@ -22,7 +36,7 @@ log_raw = "lte_udp_received_bytes_"+timestr+'.txt'
 
 from prettytable import PrettyTable
 # UDP addressed from nasmesh
-UDP_ENB_ADDR = "10.0.1.1"# 'localhost'#
+UDP_ENB_ADDR = 'localhost'#"10.0.1.1"
 UDP_UE_ADDR = "10.0.1.2"
 
 # server if 0
@@ -49,9 +63,11 @@ def parse_arguments():
 	"""
 	
 	global server_or_client
+	global n_packets
 	parser = argparse.ArgumentParser()
 
 	parser.add_argument("--server_or_client","-soc", help="Set 0 or 1 for server or client")
+	parser.add_argument("--n_packets","-np", help="Number of packets")
 	parser.add_argument("-V", "--version", help="show program version", action="store_true")
 
 
@@ -63,7 +79,16 @@ def parse_arguments():
 		elif server_or_client == 1:
 			logging.info("Running client")
 		else:
-			print("Invalid option for [-- server_or_client] %s", args.server_or_client)
+			print("Invalid option for [--server_or_client] %s", args.server_or_client)
+
+
+	if args.n_packets:
+		n_packets = int(args.n_packets)
+		
+		logging.info("Running for %d packets", n_packets)
+		
+	else:
+		print("Invalid option for [--n_packets] %s, Running for default value", args.n_packets)
 # ===========================================================================
 
 
@@ -144,9 +169,10 @@ class ThreadedServer(threading.Thread):
 		print("|-----------------------------------|")
 		self.outfile = open(log_filename, 'w+')
 		self.outfile_raw = open(log_raw, 'w+')
+		
 
-		while not self.kill_received:
-			try:
+		try:
+			while not self.kill_received:
 				#logging.info(self.sock)
 				ts = time.time()
 				data, address = self.sock.recvfrom(len(message)+4)
@@ -156,11 +182,11 @@ class ThreadedServer(threading.Thread):
 				
 				recv_n_packets += 1
 				string = "|Received {0:5d} bytes from client at {1:5f} s|\n".format(len(data), T)
-				print(string)
-				logging.info("Writing to file %s", string)
+				#print(string)
+				logging.debug("Writing to file %s", string)
 				self.outfile.write(string)
-				logging.info("Returned from %s", address)
-				print("|---------------------------------------------|")
+				logging.debug("Returned from %s", address)
+				#print("|---------------------------------------------|")
 				#print([hex(x) for x in data])
 				
 				if data:
@@ -179,11 +205,22 @@ class ThreadedServer(threading.Thread):
 					#print(data)
 					self.outfile_raw.writelines("%s  " % dt for dt in data)
 					self.outfile_raw.write("\n")
-					logging.info("Received %d packets", recv_n_packets)
+					
+
+					if recv_n_packets % (n_packets//5) == 0:
+							logging.info("Succesfully received %d", recv_n_packets)
+
+
 					if recv_n_packets == n_packets:
 						ber = ber/(len(data)*recv_n_packets*8)
 						Tp = throughput(tp, T)
+						
+						## little bit verbose to check operation
+
+						
+
 						print("\n\n\n")
+						logging.info("Received %d packets", recv_n_packets)
 						print('Results -----------------')
 						t = PrettyTable(table_header)
 						t.add_row([Tp, ber, tp, n_packets])
@@ -206,13 +243,14 @@ class ThreadedServer(threading.Thread):
 						print("|---------------------------------------------|")
 						print("\n\n\n\n\n")
 						print("|---------------------------------------------|")
-			except (KeyboardInterrupt, SystemExit) as e:
-				print("Exiting {0}".format(e))
-				logging.file("closing file.")
-				self.outfile.close()
-				self.close()
-				self.outfile.close()
-				self.outfile_raw.close()
+						print("|---------------------------------------------|")
+		except (KeyboardInterrupt, SystemExit, IOError) as e:
+			
+			logging.error("Exiting.. %s", e)
+			#self.outfile.close()  # close if file is not closed
+			self.close()
+			
+			self.outfile_raw.close()
 
 
 	def close(self):
@@ -221,8 +259,11 @@ class ThreadedServer(threading.Thread):
 		"""
 		logging.info("closing/stopping sockets and threads")
 		self.sock.close()
-		self.stop()
-		self.join()
+		try:
+			self.join()
+		except RuntimeError:
+			logging.error("Something went wrong with joining thread")
+
 		sys.exit(0)
 		
 
@@ -264,6 +305,14 @@ def has_livethreads(threads):
 
 def client_send(sock, ip_addr, port):
 	"""
+		client should check non-blocking mode
+		clinet should also check if it has send all 
+		the packets. Check if overflow occurred.
+		Please do a client summary for better check.
+
+		This happens in both localhost and oai0.
+		Needs to check priority(1)
+
 	"""
 
 	global message
@@ -274,10 +323,11 @@ def client_send(sock, ip_addr, port):
 	addr = (ip_addr, port)
 	
 	print("Starting up client ", addr)
-	
+	send_n_packets = 0
 	for i in range(0, n_packets):
 
 		try:
+			send_n_packets+=1
 
 			msg = message.copy()
 			if i <= 255:
@@ -285,16 +335,26 @@ def client_send(sock, ip_addr, port):
 			# remove headers for IP and UDP
 			elif i>255 and i<65507: 
 				ilow = i & 0x00FF    # lower byte
+				logging.debug("before adding high low byte %d", len(msg))
 				msg.insert(0, ilow)
 				ihigh=i>>8			 # higher byte
 				msg.insert(0, ihigh)
+				logging.debug("here adding high low byte %d", len(msg))
 				
 			msg = bytearray(x for x in msg)
-			#logging.info("message size is now:  %d", len(msg))
-			sock.sendto(msg, addr)
-		except sock.error as e:
+			logging.debug("message size is now:  %d", len(msg))
+			assert sock.sendto(msg, addr) == len(msg)
+			logging.debug("last packet sent %d", send_n_packets)
+
+		except IOError as e:
 			print("Error code: ", e)
 			sock.close()
+		finally:
+			# check how many packets are sent
+			if send_n_packets == n_packets:
+				logging.info("------------- Sent %d packets------------", send_n_packets)
+				send_n_packets = 0
+				time.sleep(1)  # sleep for 1s
 	sock.close()
 
 
@@ -305,7 +365,7 @@ def main():
 	threads = []
 	sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # socket
 	sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-	
+	#sock.setblocking(0)
 	#sock.settimeout(2.0)
 	# for server
 	if server_or_client == 0:
@@ -321,8 +381,8 @@ def main():
 			try:
 				[t.join(1) for t in threads
 				 if t is not None and t.isAlive()]
-			except (KeyboardInterrupt, SystemExit):
-				print("Killing all threads..")
+			except (KeyboardInterrupt, SystemExit, IOError):
+				logging.info("Killing all threads..")
 				for t in threads:
 					t.kill_received = True
 					t.outfile.close()
@@ -335,6 +395,7 @@ def main():
 	elif server_or_client == 1:
 		
 		print("Client starting..")
+		
 		client_send(sock, UDP_ENB_ADDR, UDP_PORT)
 		
 		
