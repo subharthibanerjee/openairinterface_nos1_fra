@@ -18,6 +18,10 @@
 
 	** add more data to the message by a multiplier
 
+
+	# add exit table. The code should integrate the user
+	keyboardinterrupt and a detailed report of execution
+
 '''
 
 import socket
@@ -150,6 +154,10 @@ class ThreadedServer(threading.Thread):
 		self.kill_received = False
 		self.outfile = None
 		self.outfile_raw = None
+		self.throughput = [] # list to calculate average and max
+		self.delay = []
+		self.ber = []
+
 		threading.Thread.__init__(self)
 		
 		
@@ -208,13 +216,16 @@ class ThreadedServer(threading.Thread):
 					
 
 					if recv_n_packets % (n_packets//5) == 0:
-							logging.info("Succesfully received %d", recv_n_packets)
+							logging.info("Succesfully received %d packets", recv_n_packets)
 
 
 					if recv_n_packets == n_packets:
 						ber = ber/(len(data)*recv_n_packets*8)
+						ber = ber * 100
 						Tp = throughput(tp, T)
-						
+						self.throughput.append(Tp)
+						self.ber.append(ber)
+						self.delay.append(T)
 						## little bit verbose to check operation
 
 						
@@ -388,6 +399,15 @@ def main():
 					t.outfile.close()
 					t.outfile_raw.close()
 					logging.info("Closed outfile")
+				logging.info("House keeping with final results for %d runs", len(udpserver.throughput))
+				final_header = ["Max Throughput", "Avg Throughput", "Min Delay", "Avg Delay", "Min BER", "Avg BER"]
+				t = PrettyTable(final_header)
+				t.add_row([max(udpserver.throughput), sum(udpserver.throughput)//len(udpserver.throughput),
+					       min(udpserver.delay), sum(udpserver.delay)/len(udpserver.delay),
+					       min(udpserver.ber), sum(udpserver.ber)//len(udpserver.ber)])
+				print(t)
+
+
 			
 		#sock.close()
 		print("bye..")
