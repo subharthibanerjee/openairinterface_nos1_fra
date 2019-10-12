@@ -396,16 +396,20 @@ def main():
 				logging.info("Killing all threads..")
 				for t in threads:
 					t.kill_received = True
+					
+					
+					logging.info("House keeping with final results for %d runs", len(udpserver.throughput))
+					final_header = ["Max Throughput", "Avg Throughput", "Min Delay", "Avg Delay", "Min BER", "Avg BER"]
+					tab = PrettyTable(final_header)
+					tab.add_row([max(udpserver.throughput), sum(udpserver.throughput)//len(udpserver.throughput),
+						       min(udpserver.delay), sum(udpserver.delay)/len(udpserver.delay),
+						       min(udpserver.ber), sum(udpserver.ber)//len(udpserver.ber)])
+					print(tab)
+					print()
+					t.outfile.write(tab.get_string())
 					t.outfile.close()
 					t.outfile_raw.close()
-					logging.info("Closed outfile")
-				logging.info("House keeping with final results for %d runs", len(udpserver.throughput))
-				final_header = ["Max Throughput", "Avg Throughput", "Min Delay", "Avg Delay", "Min BER", "Avg BER"]
-				t = PrettyTable(final_header)
-				t.add_row([max(udpserver.throughput), sum(udpserver.throughput)//len(udpserver.throughput),
-					       min(udpserver.delay), sum(udpserver.delay)/len(udpserver.delay),
-					       min(udpserver.ber), sum(udpserver.ber)//len(udpserver.ber)])
-				print(t)
+					logging.info("Closed outfiles..")
 
 
 			
